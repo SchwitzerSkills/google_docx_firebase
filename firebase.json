@@ -1,0 +1,17 @@
+{
+  "token": "1//0cNeZKjNvEReUCgYIARAAGAwSNwF-L9IrpFfnlOsD_3uOLF3oPIYoawe-Pa72GsisKkuDfvADZMDFIGfPXYN5aU8G4f4skkz1meA",
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

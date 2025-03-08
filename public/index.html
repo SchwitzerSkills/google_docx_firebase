@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Phillipsdocx</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/firepad@1.5.10/dist/firepad.css" />
+    <script src="https://cdn.jsdelivr.net/npm/firepad@1.5.10/dist/firepad.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css" />
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      #login-div { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #fff; display: flex; justify-content: center; align-items: center; z-index: 10; }
+      #firepad-div { width: 100%; height: 100%; display: none; }
+      #firepad-container { width: 100%; height: 100%; }
+      .powered-by-firepad, .firepad-powered-by-firepad a { display: none !important; }
+      .firepad-user-label { padding: 2px 4px; border-radius: 4px; color: #fff; font-size: 12px; }
+      .firepad-cursor-caret { border-left: 2px solid; height: 1.2em; margin-top: -0.6em; }
+      .firepad-cursor img { vertical-align: middle; margin-right: 4px; border-radius: 50%; }
+    </style>
+    
+    <!-- Überschreibe Cursor-Erzeugung -->
+    <script>
+      window.userPhotos = {};
+      if (Firepad && Firepad.FirebaseAdapter && Firepad.FirebaseAdapter.prototype) {
+        Firepad.FirebaseAdapter.prototype.makeCursorElement = function(userId, userDisplayName, userColor) {
+          var cursor = document.createElement("div");
+          cursor.className = "firepad-cursor";
+          cursor.style.position = "absolute";
+          
+          var caret = document.createElement("div");
+          caret.className = "firepad-cursor-caret";
+          caret.style.borderLeftColor = userColor;
+          cursor.appendChild(caret);
+          
+          var label = document.createElement("div");
+          label.className = "firepad-user-label";
+          label.style.backgroundColor = userColor;
+          
+          if (window.userPhotos && window.userPhotos[userId]) {
+            var img = document.createElement("img");
+            img.src = window.userPhotos[userId];
+            img.style.width = "16px";
+            img.style.height = "16px";
+            label.appendChild(img);
+          }
+          
+          var span = document.createElement("span");
+          span.textContent = userDisplayName || "Anonymous";
+          label.appendChild(span);
+          
+          cursor.appendChild(label);
+          return cursor;
+        };
+      }
+    </script>
+  </head>
+  <body>
+    <h2>Phillipsdocx</h2>
+    <div id="login-div">
+      <button id="login-btn">Mit Google anmelden</button>
+      <button id="login-btn1">Anonym anmelden</button>
+    </div>
+    <div id="logout-div">
+      <button id="logout-btn">Abmelden</button>
+    </div>
+    <div id="firepad-div">
+      <div id="firepad-container"></div>
+    </div>
+    <script>
+      const firebaseConfig = {
+        apiKey: "AIzaSyCbkvwxKuuYxVRxCJBzwHi7_Yj1BNnCLdY",
+        authDomain: "docu-d9da9.firebaseapp.com",
+        databaseURL: "https://docu-d9da9-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "docu-d9da9",
+        storageBucket: "docu-d9da9.appspot.com",
+        messagingSenderId: "383157744806",
+        appId: "1:383157744806:web:9609d823e3153a5ea23067",
+        measurementId: "G-FEZ3J7GXW8"
+      };
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+      const database = firebase.database();
+      let myFirepad = null;
+      let imageObserver = null;
+      let cmWrapper = null;
+      
+      auth.onAuthStateChanged(user => {
+        if (user) {
+          window.userPhotos[user.uid] = user.photoURL || "";
+          document.getElementById("login-div").style.display = "none";
+          document.getElementById("firepad-div").style.display = "block";
+          document.getElementById("logout-div").style.display = "block";
+          initFirepad(user);
+        } else {
+          document.getElementById("login-div").style.display = "flex";
+          document.getElementById("firepad-div").style.display = "none";
+        }
+      });
+      
+      document.getElementById("login-btn").addEventListener("click", () => {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        auth.signInWithPopup(provider).catch(error => {
+          console.error("Login-Fehler:", error);
+        });
+      });
+
+      document.getElementById("login-btn1").addEventListener("click", () => {
+        auth.signInAnonymously().catch((error) => {
+          console.error("Login-Fehler:", error);
+        })
+      });
+
+      document.getElementById("logout-btn").addEventListener("click", () => {
+        auth.signOut().catch((error) => {
+          console.error("Logout-Fehler:", error);
+        })
+      });
+      
+      function initFirepad(user) {
+        const codeMirror = CodeMirror(document.getElementById("firepad-container"), { lineWrapping: true });
+        const firepadRef = database.ref("firepad-demo-fullscreen");
+        const randomColor = "#" + Math.floor(Math.random() * 16777215).toString(16);
+        myFirepad = Firepad.fromCodeMirror(firepadRef, codeMirror, {
+          userId: user.uid,
+          userDisplayName: user.displayName || "Anonymous",
+          userColor: randomColor,
+          defaultText: "Willkommen im kollaborativen Editor!\nFüge Bilder per STRG+V ein.",
+          richTextShortcuts: true,
+          richTextToolbar: true
+        });
+        myFirepad.on("ready", () => {
+          if (myFirepad.firebaseAdapter_ && myFirepad.firebaseAdapter_.cursorManager_) {
+            myFirepad.firebaseAdapter_.cursorManager_.setShowOwnCursor(true);
+          }
+        });
+        codeMirror.on("paste", function(cm, event) {
+          if (!event.clipboardData) return;
+          const items = event.clipboardData.items;
+          if (!items) return;
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === "file" && item.type.indexOf("image/") === 0) {
+              event.preventDefault();
+              const file = item.getAsFile();
+              pasteImageFile(file);
+            }
+          }
+        });
+        function pasteImageFile(file) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const dataURL = e.target.result;
+            myFirepad.insertEntity("img", { src: dataURL });
+          };
+          reader.readAsDataURL(file);
+        }
+        cmWrapper = codeMirror.getWrapperElement();
+        imageObserver = new MutationObserver(mutations => {
+          mutations.forEach(mutation => {
+            mutation.addedNodes.forEach(node => {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.tagName === "IMG") { attachResizable(node); }
+                $(node).find("img").each(function() { attachResizable(this); });
+              }
+            });
+          });
+        });
+        imageObserver.observe(cmWrapper, { childList: true, subtree: true });
+      }
+      
+      function attachResizable(img) {
+        if ($(img).data("resizableAttached")) return;
+        $(img).data("resizableAttached", true);
+        $(img).resizable({ aspectRatio: true, handles: "n, e, s, w, ne, se, sw, nw" });
+      }
+    </script>
+  </body>
+</html>
